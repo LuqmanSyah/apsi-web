@@ -33,8 +33,7 @@ export function LoginPage() {
   const [password, setPassword] = useState("user123");
   const [error, setError] = useState("");
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
+  const submitLogin = () => {
     const session = login(email, password);
     if (!session) {
       setError("Email atau password dummy tidak sesuai.");
@@ -82,11 +81,17 @@ export function LoginPage() {
             ))}
           </div>
         </section>
-        <form
-          onSubmit={submit}
+        <section
+          role="form"
+          aria-labelledby="login-form-title"
+          onKeyDown={(event) => {
+            if (event.key === "Enter") submitLogin();
+          }}
           className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm"
         >
-          <h2 className="text-2xl font-bold text-zinc-950">Form Login</h2>
+          <h2 id="login-form-title" className="text-2xl font-bold text-zinc-950">
+            Form Login
+          </h2>
           <label className="mt-6 block text-sm font-semibold text-zinc-700">
             Email
             <input
@@ -105,8 +110,14 @@ export function LoginPage() {
             />
           </label>
           {error ? <p className="mt-4 text-sm font-semibold text-rose-600">{error}</p> : null}
-          <button className={`${buttonClass} mt-6 w-full`}>Masuk</button>
-        </form>
+          <button
+            type="button"
+            onClick={submitLogin}
+            className={`${buttonClass} mt-6 w-full`}
+          >
+            Masuk
+          </button>
+        </section>
       </main>
     </div>
   );
