@@ -4,6 +4,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import { RequireRole } from "@/src/components/auth";
 import { BookingTable } from "@/src/components/booking";
+import { FeedbackModal, type FeedbackVariant } from "@/src/components/modal";
 import { PublicNav, UserLayout } from "@/src/components/navigation";
 import {
   ButtonLink,
@@ -26,17 +27,50 @@ import {
 } from "@/src/lib/utils";
 import type { BookingStatus, PaymentMethod } from "@/src/types";
 
+type Notice = {
+  title: string;
+  message?: string;
+  variant: FeedbackVariant;
+  onClose?: () => void;
+};
+
+function NoticeModal({
+  notice,
+  onClose,
+}: {
+  notice: Notice | null;
+  onClose: () => void;
+}) {
+  return (
+    <FeedbackModal
+      open={Boolean(notice)}
+      title={notice?.title ?? ""}
+      message={notice?.message}
+      variant={notice?.variant ?? "info"}
+      onClose={() => {
+        const callback = notice?.onClose;
+        onClose();
+        callback?.();
+      }}
+    />
+  );
+}
+
 export function LoginPage() {
   const router = useRouter();
   const { login } = useSession();
   const [email, setEmail] = useState("user@harmoni.com");
   const [password, setPassword] = useState("user123");
-  const [error, setError] = useState("");
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   const submitLogin = () => {
     const session = login(email, password);
     if (!session) {
-      setError("Email atau password dummy tidak sesuai.");
+      setNotice({
+        title: "Login gagal",
+        message: "Email atau password dummy tidak sesuai.",
+        variant: "error",
+      });
       return;
     }
     router.push(session.role === "admin" ? "/admin/dashboard" : "/dashboard");
@@ -45,7 +79,7 @@ export function LoginPage() {
   const chooseAccount = (account: (typeof dummyAccounts)[number]) => {
     setEmail(account.email);
     setPassword(account.password);
-    setError("");
+    setNotice(null);
   };
 
   return (
@@ -109,7 +143,6 @@ export function LoginPage() {
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
-          {error ? <p className="mt-4 text-sm font-semibold text-rose-600">{error}</p> : null}
           <button
             type="button"
             onClick={submitLogin}
@@ -119,6 +152,7 @@ export function LoginPage() {
           </button>
         </section>
       </main>
+      <NoticeModal notice={notice} onClose={() => setNotice(null)} />
     </div>
   );
 }
@@ -182,7 +216,7 @@ export function BookingFormPage() {
   const [start, setStart] = useState("10:00");
   const [end, setEnd] = useState("12:00");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [error, setError] = useState("");
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   const selectedStudio = state.studios.find((studio) => studio.id_studio === studioId);
   const duration = getDurationHours(start, end);
@@ -195,16 +229,36 @@ export function BookingFormPage() {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    setError("");
+    setNotice(null);
 
     if (!session?.id_pelanggan) {
       router.push("/login");
       return;
     }
-    if (!selectedStudio) return setError("Pilih studio terlebih dahulu.");
-    if (duration <= 0) return setError("Jam selesai harus lebih besar dari jam mulai.");
+    if (!selectedStudio) {
+      setNotice({
+        title: "Booking gagal",
+        message: "Pilih studio terlebih dahulu.",
+        variant: "error",
+      });
+      return;
+    }
+    if (duration <= 0) {
+      setNotice({
+        title: "Jam tidak valid",
+        message: "Jam selesai harus lebih besar dari jam mulai.",
+        variant: "error",
+      });
+      return;
+    }
     if (hasScheduleConflict(state.pemesanan, studioId, date, start, end)) {
-      return setError("Slot waktu sudah dibooking");
+      setNotice({
+        title: "Slot waktu sudah dibooking",
+        message:
+          "Pilih tanggal atau jam lain karena jadwal ini sudah berstatus Pending atau Confirmed.",
+        variant: "warning",
+      });
+      return;
     }
 
     const bookingId = addBooking(
@@ -222,7 +276,12 @@ export function BookingFormPage() {
       })),
     );
 
-    router.push(`/invoice/${bookingId}`);
+    setNotice({
+      title: "Booking berhasil dibuat",
+      message: "Status booking baru adalah Pending. Invoice akan dibuka setelah popup ditutup.",
+      variant: "success",
+      onClose: () => router.push(`/invoice/${bookingId}`),
+    });
   };
 
   return (
@@ -308,7 +367,6 @@ export function BookingFormPage() {
                 </label>
               ))}
             </div>
-            {error ? <p className="mt-4 text-sm font-semibold text-rose-600">{error}</p> : null}
           </section>
           <aside className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm lg:sticky lg:top-24 lg:self-start">
             <h2 className="text-xl font-bold text-zinc-950">Ringkasan biaya</h2>
@@ -333,6 +391,7 @@ export function BookingFormPage() {
             <button className={`${buttonClass} mt-6 w-full`}>Buat Booking</button>
           </aside>
         </form>
+        <NoticeModal notice={notice} onClose={() => setNotice(null)} />
       </UserLayout>
     </RequireRole>
   );
@@ -465,16 +524,31 @@ export function PaymentPage() {
   const [method, setMethod] = useState<PaymentMethod>("Transfer Bank");
   const [amount, setAmount] = useState(booking?.total_biaya ?? 0);
   const [proof, setProof] = useState("");
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (!booking) return;
+    if (amount <= 0) {
+      setNotice({
+        title: "Jumlah bayar tidak valid",
+        message: "Jumlah bayar harus lebih dari 0.",
+        variant: "error",
+      });
+      return;
+    }
     addPayment(booking.id_pemesanan, {
       metode_pembayaran: method,
       jumlah_bayar: amount,
       bukti_pembayaran: proof || "bukti-pembayaran-dummy.jpg",
     });
-    router.push(`/my-bookings/${booking.id_pemesanan}`);
+    setNotice({
+      title: "Bukti pembayaran tersimpan",
+      message:
+        "Status pembayaran menjadi Menunggu Verifikasi. Detail booking akan dibuka setelah popup ditutup.",
+      variant: "success",
+      onClose: () => router.push(`/my-bookings/${booking.id_pemesanan}`),
+    });
   };
 
   return (
@@ -530,6 +604,7 @@ export function PaymentPage() {
             </button>
           </form>
         )}
+        <NoticeModal notice={notice} onClose={() => setNotice(null)} />
       </UserLayout>
     </RequireRole>
   );
@@ -539,6 +614,7 @@ export function MyBookingsPage() {
   const { session } = useSession();
   const { state, updateBookingStatus } = useHarmoniStore();
   const [filter, setFilter] = useState<"Semua" | BookingStatus>("Semua");
+  const [notice, setNotice] = useState<Notice | null>(null);
   const bookings = state.pemesanan.filter(
     (booking) =>
       booking.id_pelanggan === session?.id_pelanggan &&
@@ -600,9 +676,14 @@ export function MyBookingsPage() {
                       {booking.status_booking === "Pending" ? (
                         <button
                           className="rounded-lg border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"
-                          onClick={() =>
-                            updateBookingStatus(booking.id_pemesanan, "Canceled")
-                          }
+                          onClick={() => {
+                            updateBookingStatus(booking.id_pemesanan, "Canceled");
+                            setNotice({
+                              title: "Booking dibatalkan",
+                              message: `INV-${booking.id_pemesanan} sekarang berstatus Canceled.`,
+                              variant: "success",
+                            });
+                          }}
                         >
                           Batalkan
                         </button>
@@ -616,6 +697,7 @@ export function MyBookingsPage() {
             <EmptyState>Tidak ada booking untuk filter ini.</EmptyState>
           )}
         </div>
+        <NoticeModal notice={notice} onClose={() => setNotice(null)} />
       </UserLayout>
     </RequireRole>
   );

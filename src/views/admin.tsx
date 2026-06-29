@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { RequireRole } from "@/src/components/auth";
+import { FeedbackModal, type FeedbackVariant } from "@/src/components/modal";
 import { AdminLayout } from "@/src/components/navigation";
 import {
   EmptyState,
@@ -24,6 +25,30 @@ import type {
   Studio,
   StudioStatus,
 } from "@/src/types";
+
+type Notice = {
+  title: string;
+  message?: string;
+  variant: FeedbackVariant;
+};
+
+function NoticeModal({
+  notice,
+  onClose,
+}: {
+  notice: Notice | null;
+  onClose: () => void;
+}) {
+  return (
+    <FeedbackModal
+      open={Boolean(notice)}
+      title={notice?.title ?? ""}
+      message={notice?.message}
+      variant={notice?.variant ?? "info"}
+      onClose={onClose}
+    />
+  );
+}
 
 export function AdminDashboardPage() {
   const { state } = useHarmoniStore();
@@ -103,9 +128,18 @@ export function AdminStudiosPage() {
     status: "Tersedia",
   };
   const [form, setForm] = useState<Studio>(blank);
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (!form.nama_studio.trim()) {
+      setNotice({
+        title: "Studio gagal disimpan",
+        message: "Nama studio wajib diisi.",
+        variant: "error",
+      });
+      return;
+    }
     const payload = {
       ...form,
       fasilitas:
@@ -113,8 +147,21 @@ export function AdminStudiosPage() {
           ? String(form.fasilitas).split(",").map((item) => item.trim())
           : form.fasilitas,
     };
-    if (form.id_studio) updateStudio(payload);
-    else addStudio(payload);
+    if (form.id_studio) {
+      updateStudio(payload);
+      setNotice({
+        title: "Studio diperbarui",
+        message: `${payload.nama_studio} berhasil disimpan.`,
+        variant: "success",
+      });
+    } else {
+      addStudio(payload);
+      setNotice({
+        title: "Studio ditambahkan",
+        message: `${payload.nama_studio} berhasil masuk ke daftar studio.`,
+        variant: "success",
+      });
+    }
     setForm(blank);
   };
 
@@ -166,7 +213,14 @@ export function AdminStudiosPage() {
                     <td className="px-4 py-3"><StatusBadge status={studio.status} /></td>
                     <td className="px-4 py-3">
                       <button className="mr-3 font-semibold text-teal-700" onClick={() => setForm(studio)}>Edit</button>
-                      <button className="font-semibold text-rose-700" onClick={() => deleteStudio(studio.id_studio)}>Hapus</button>
+                      <button className="font-semibold text-rose-700" onClick={() => {
+                        deleteStudio(studio.id_studio);
+                        setNotice({
+                          title: "Studio dihapus",
+                          message: `${studio.nama_studio} dihapus dari dummy data.`,
+                          variant: "success",
+                        });
+                      }}>Hapus</button>
                     </td>
                   </tr>
                 ))}
@@ -174,6 +228,7 @@ export function AdminStudiosPage() {
             </table>
           </div>
         </CrudShell>
+        <NoticeModal notice={notice} onClose={() => setNotice(null)} />
       </AdminLayout>
     </RequireRole>
   );
@@ -189,11 +244,33 @@ export function AdminInstrumentsPage() {
     status: "Tersedia",
   };
   const [form, setForm] = useState<AlatMusik>(blank);
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (form.id_alat) updateInstrument(form);
-    else addInstrument(form);
+    if (!form.nama_alat.trim()) {
+      setNotice({
+        title: "Alat gagal disimpan",
+        message: "Nama alat musik wajib diisi.",
+        variant: "error",
+      });
+      return;
+    }
+    if (form.id_alat) {
+      updateInstrument(form);
+      setNotice({
+        title: "Alat musik diperbarui",
+        message: `${form.nama_alat} berhasil disimpan.`,
+        variant: "success",
+      });
+    } else {
+      addInstrument(form);
+      setNotice({
+        title: "Alat musik ditambahkan",
+        message: `${form.nama_alat} berhasil masuk ke daftar alat.`,
+        variant: "success",
+      });
+    }
     setForm(blank);
   };
 
@@ -240,7 +317,14 @@ export function AdminInstrumentsPage() {
                     <td className="px-4 py-3"><StatusBadge status={instrument.status} /></td>
                     <td className="px-4 py-3">
                       <button className="mr-3 font-semibold text-teal-700" onClick={() => setForm(instrument)}>Edit</button>
-                      <button className="font-semibold text-rose-700" onClick={() => deleteInstrument(instrument.id_alat)}>Hapus</button>
+                      <button className="font-semibold text-rose-700" onClick={() => {
+                        deleteInstrument(instrument.id_alat);
+                        setNotice({
+                          title: "Alat musik dihapus",
+                          message: `${instrument.nama_alat} dihapus dari dummy data.`,
+                          variant: "success",
+                        });
+                      }}>Hapus</button>
                     </td>
                   </tr>
                 ))}
@@ -248,6 +332,7 @@ export function AdminInstrumentsPage() {
             </table>
           </div>
         </CrudShell>
+        <NoticeModal notice={notice} onClose={() => setNotice(null)} />
       </AdminLayout>
     </RequireRole>
   );
@@ -256,6 +341,7 @@ export function AdminInstrumentsPage() {
 export function AdminBookingsPage() {
   const { state, updateBookingStatus } = useHarmoniStore();
   const [filter, setFilter] = useState<"Semua" | BookingStatus>("Semua");
+  const [notice, setNotice] = useState<Notice | null>(null);
   const bookings = state.pemesanan.filter(
     (booking) => filter === "Semua" || booking.status_booking === filter,
   );
@@ -296,7 +382,15 @@ export function AdminBookingsPage() {
                       <td className="px-4 py-3">{formatCurrency(booking.total_biaya)}</td>
                       <td className="px-4 py-3"><StatusBadge status={booking.status_booking} /></td>
                       <td className="px-4 py-3">
-                        <select className={inputClass} value={booking.status_booking} onChange={(event) => updateBookingStatus(booking.id_pemesanan, event.target.value as BookingStatus)}>
+                        <select className={inputClass} value={booking.status_booking} onChange={(event) => {
+                          const status = event.target.value as BookingStatus;
+                          updateBookingStatus(booking.id_pemesanan, status);
+                          setNotice({
+                            title: "Status booking diperbarui",
+                            message: `${booking.id_pemesanan} sekarang berstatus ${status}.`,
+                            variant: "success",
+                          });
+                        }}>
                           <option>Pending</option>
                           <option>Confirmed</option>
                           <option>Canceled</option>
@@ -309,6 +403,7 @@ export function AdminBookingsPage() {
             </table>
           </div>
         </div>
+        <NoticeModal notice={notice} onClose={() => setNotice(null)} />
       </AdminLayout>
     </RequireRole>
   );
@@ -316,6 +411,7 @@ export function AdminBookingsPage() {
 
 export function AdminPaymentsPage() {
   const { state, updatePaymentStatus } = useHarmoniStore();
+  const [notice, setNotice] = useState<Notice | null>(null);
   const payments = state.pembayaran.slice().sort((a, b) =>
     a.status_pembayaran === "Menunggu Verifikasi" ? -1 : b.status_pembayaran === "Menunggu Verifikasi" ? 1 : 0,
   );
@@ -341,14 +437,29 @@ export function AdminPaymentsPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <button className={buttonClass} onClick={() => updatePaymentStatus(payment.id_pembayaran, "Lunas")}>Verifikasi</button>
-                    <button className="rounded-lg border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50" onClick={() => updatePaymentStatus(payment.id_pembayaran, "Ditolak")}>Tolak</button>
+                    <button className={buttonClass} onClick={() => {
+                      updatePaymentStatus(payment.id_pembayaran, "Lunas");
+                      setNotice({
+                        title: "Pembayaran diverifikasi",
+                        message: `${payment.id_pembayaran} menjadi Lunas dan booking terkait menjadi Confirmed.`,
+                        variant: "success",
+                      });
+                    }}>Verifikasi</button>
+                    <button className="rounded-lg border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50" onClick={() => {
+                      updatePaymentStatus(payment.id_pembayaran, "Ditolak");
+                      setNotice({
+                        title: "Pembayaran ditolak",
+                        message: `${payment.id_pembayaran} menjadi Ditolak. Status booking tetap Pending.`,
+                        variant: "warning",
+                      });
+                    }}>Tolak</button>
                   </div>
                 </div>
               </article>
             );
           }) : <EmptyState>Belum ada pembayaran.</EmptyState>}
         </div>
+        <NoticeModal notice={notice} onClose={() => setNotice(null)} />
       </AdminLayout>
     </RequireRole>
   );
